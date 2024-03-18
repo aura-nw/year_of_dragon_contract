@@ -1,9 +1,7 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Decimal;
 use nois::NoisCallback;
 
-use crate::state::{Config, GemInfo, GemMetadata, RequestForgeGemInfo, UserInfo};
-
+use crate::state::Config;
 
 /// Message type for `instantiate` entry_point
 #[cw_serde]
@@ -18,13 +16,9 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     // Forging gem
-    ForgeGem {
-        request_forge_hash: String,
-    },
+    ForgeGem { request_forge_hash: String },
     // Nois callback
-    NoisReceive {
-        callback: NoisCallback,
-    },
+    NoisReceive { callback: NoisCallback },
 }
 
 #[cw_serde]

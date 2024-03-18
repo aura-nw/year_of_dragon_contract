@@ -1,29 +1,22 @@
-use std::str::FromStr;
-
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    ensure_eq, has_coins, to_binary, to_json_binary, wasm_execute, Addr, Api, BalanceResponse, BankMsg, BankQuery, Binary, Coin, CosmosMsg, Decimal, Deps, DepsMut, Empty, Env, HexBinary, MessageInfo, Order, QueryRequest, Response, StdResult, Storage, Timestamp, Uint128, WasmMsg, WasmQuery
+    ensure_eq, to_json_binary, Addr, Api, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    Response, StdResult, WasmMsg,
 };
 use cw2::set_contract_version;
 
-use cw721::{Cw721ExecuteMsg, Cw721QueryMsg, NftInfoResponse};
-use cw721_base::ExecuteMsg as Cw721BaseExecuteMsg;
+use nois::{NoisCallback, ProxyExecuteMsg};
 
-use cw20::Cw20ExecuteMsg;
-use nois::{randomness_from_str, select_from_weighted, sub_randomness_with_key, NoisCallback, ProxyExecuteMsg};
-
-use crate::{error::ContractError, msg::{ExecuteMsg, InstantiateMsg, QueryMsg}, state::{AuragonURI, Config, GemInfo, GemMetadata, Metadata, RandomJob, RequestForgeGemInfo, Trait, UserFinalGemInfo, UserInfo, CONFIG, RANDOM_JOBS, RANDOM_SEED}};
-
+use crate::{
+    error::ContractError,
+    msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
+    state::{Config, CONFIG, RANDOM_JOBS, RANDOM_SEED},
+};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:wheel-of-fortune";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-const MAX_TEXT_LENGTH: usize = 253;
-const MAX_VEC_ITEM: usize = 65536;
-const MAX_SPINS_PER_TURN: u32 = 10;
-const DEFAULT_ACTIVATE: bool = false;
 
 /// Handling contract instantiation
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -39,6 +32,7 @@ pub fn instantiate(
 
     let config = Config {
         nois_proxy,
+        contract_owner: info.sender.clone(),
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -58,8 +52,9 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::ForgeGem { request_forge_hash }
-            => execute_forge_gem(deps, env, info, request_forge_hash),
+        ExecuteMsg::ForgeGem { request_forge_hash } => {
+            execute_forge_gem(deps, env, info, request_forge_hash)
+        }
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
     }
@@ -73,6 +68,12 @@ pub fn execute_forge_gem(
 ) -> Result<Response, ContractError> {
     // Load the config
     let config = CONFIG.load(deps.storage)?;
+    // Only contract owner can forge gem
+    ensure_eq!(
+        info.sender,
+        config.contract_owner,
+        ContractError::Unauthorized {}
+    );
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
 
@@ -80,24 +81,33 @@ pub fn execute_forge_gem(
 
     let mut res = Response::new();
 
+    let after = env.block.time.plus_seconds(1);
+
     // Make randomness request message to NOIS proxy contract
     let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: nois_proxy.into(),
-        msg: to_json_binary(&ProxyExecuteMsg::GetNextRandomness {
+        msg: to_json_binary(&ProxyExecuteMsg::GetRandomnessAfter {
             job_id: request_forge_hash.clone(),
+            after,
         })?,
         funds,
     });
 
     res = res.add_message(msg_make_randomess);
 
-    RANDOM_JOBS.save(deps.storage, request_forge_hash.clone(), &"waiting...".to_string())?;
-    Ok(res)
+    RANDOM_JOBS.save(
+        deps.storage,
+        request_forge_hash.clone(),
+        &"waiting...".to_string(),
+    )?;
+    Ok(res.add_attribute("action", "forge_gem")
+        .add_attribute("request_forge_hash", request_forge_hash)
+        .add_attribute("after", after.to_string()))
 }
 
 pub fn nois_receive(
     deps: DepsMut,
-    env: Env,
+    _env: Env,
     info: MessageInfo,
     callback: NoisCallback,
 ) -> Result<Response, ContractError> {
@@ -110,13 +120,13 @@ pub fn nois_receive(
     );
     let res = Response::new();
     let job_id = callback.job_id;
-    let randomness: [u8; 32] = callback
-        .randomness
-        .to_array()
-        .map_err(|_| ContractError::InvalidRandomness {})?;
+    // let randomness: [u8; 32] = callback
+    //     .randomness
+    //     .to_array()
+    //     .map_err(|_| ContractError::InvalidRandomness {})?;
 
     // Convert the random seed to string
-    let randomness_string: String = callback.randomness.to_string();
+    let randomness_string: String = callback.randomness.to_hex();
 
     // update random seed
     RANDOM_SEED.save(deps.storage, &randomness_string)?;
@@ -131,11 +141,13 @@ pub fn nois_receive(
 
 /// Handling contract query
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         QueryMsg::RandomSeed {} => to_json_binary(&query_random_seed(deps)?),
-        QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(&query_random_seed_from_request_forge_hash(deps, request_forge_hash)?),
+        QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
+            &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
+        ),
     }
 }
 
@@ -149,7 +161,10 @@ fn query_random_seed(deps: Deps) -> StdResult<String> {
     Ok(random_seed)
 }
 
-fn query_random_seed_from_request_forge_hash(deps: Deps, request_forge_hash: String) -> StdResult<String> {
+fn query_random_seed_from_request_forge_hash(
+    deps: Deps,
+    request_forge_hash: String,
+) -> StdResult<String> {
     let random_job = RANDOM_JOBS.load(deps.storage, request_forge_hash)?;
     Ok(random_job)
 }
@@ -164,24 +179,44 @@ fn addr_validate(api: &dyn Api, addr: &str) -> Result<Addr, ContractError> {
 
 // Unit test for select_gem_rewards
 #[cfg(test)]
-mod test_select_gem_rewards {
-    use cosmwasm_std::{testing::mock_dependencies, Addr, Timestamp};
+mod test_nois_receive {
+    use cosmwasm_std::{
+        testing::{mock_dependencies, mock_env, mock_info},
+        Addr, HexBinary, Timestamp,
+    };
+    use nois::NoisCallback;
 
-    use crate::{state::{AuragonURI, Config, RandomJob, CONFIG, RANDOM_JOBS}};
+    use crate::state::{Config, CONFIG};
 
     #[test]
-    fn test_select_gem_rewards() {
+    fn test_nois_receive() {
         let mut deps = mock_dependencies();
+
+        let env = mock_env();
+
+        let sender = "nois_proxy".to_string();
+        let funds = vec![];
+
+        let info = mock_info(&sender, &funds);
         let config = {
             Config {
                 nois_proxy: Addr::unchecked("nois_proxy"),
+                contract_owner: Addr::unchecked("contract_owner"),
             }
         };
         CONFIG.save(&mut deps.storage, &config).unwrap();
-        let auragon_gem_latest_token_id = 1;
 
+        let job_id = "job_id".to_string();
+        let randomness =
+            "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();
+        let callback = NoisCallback {
+            job_id: job_id.clone(),
+            published: Timestamp::from_seconds(1682086395),
+            randomness: HexBinary::from_hex(&randomness).unwrap(),
+        };
 
-        println!("AURA LATEST TOKEN: {:?}", auragon_gem_latest_token_id);
-        // assert_eq!(res.unwrap().messages, vec![]);
+        let res = super::nois_receive(deps.as_mut(), env, info, callback).unwrap();
+
+        assert_eq!(res.attributes.len(), 2);
     }
 }

@@ -3,9 +3,13 @@
   "title": "Config",
   "type": "object",
   "required": [
+    "contract_owner",
     "nois_proxy"
   ],
   "properties": {
+    "contract_owner": {
+      "$ref": "#/definitions/Addr"
+    },
     "nois_proxy": {
       "$ref": "#/definitions/Addr"
     }
