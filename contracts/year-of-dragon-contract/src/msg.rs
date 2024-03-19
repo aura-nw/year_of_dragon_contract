@@ -17,8 +17,8 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     // Forging gem
     ForgeGem { request_forge_hash: String },
-    // Get Jackpot Gems
-    GetJackpotGems { request_get_jackpot_hash: String },
+    // Select Jackpot Gems
+    SelectJackpotGems { campaign_id: String },
     // Nois callback
     NoisReceive { callback: NoisCallback },
 }
@@ -31,7 +31,10 @@ pub enum QueryMsg {
     // Random seed
     #[returns(String)]
     RandomSeed {},
-    // Query Random seed from request hash
+    // Query Random seed from request forge hash
     #[returns(RandomResponse)]
-    RandomSeedFromRequestHash { request_hash: String },
+    RandomSeedFromRequestForgeHash { request_forge_hash: String },
+    // Query Jackpot Gems from campaign id
+    #[returns(String)]
+    GetJackpotGems { campaign_id: String },
 }

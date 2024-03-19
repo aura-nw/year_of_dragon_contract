@@ -17,7 +17,6 @@ pub struct RandomJob {
 pub struct RandomResponse {
     pub request_forge_hash: String,
     pub random_seed: String,
-    pub action: String,
     pub drand_round: String,
 }
 
@@ -39,4 +38,4 @@ pub const RANDOM_JOBS: Map<String, RandomJobs> = Map::new("random jobs");
 
 pub const DRAND_ROUND_WITH_HASH: Map<String, String> = Map::new("drand round with hash");
 
-pub const JACKPOT_GEMS_WITH_HASH: Map<String, String> = Map::new("jackpot gems with hash");
+pub const JACKPOT_GEMS_WITH_CAMPAIGN_ID: Map<String, String> = Map::new("jackpot gems with campaign id");

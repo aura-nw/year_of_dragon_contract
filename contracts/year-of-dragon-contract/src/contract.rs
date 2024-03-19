@@ -10,7 +10,7 @@ use nois::{select_from_weighted, sub_randomness_with_key, NoisCallback, ProxyExe
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_HASH, RANDOM_JOBS, RANDOM_SEED},
+    state::{Config, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED},
 };
 
 // version info for migration info
@@ -52,8 +52,8 @@ pub fn execute(
         ExecuteMsg::ForgeGem { request_forge_hash } => {
             execute_forge_gem(deps, env, info, request_forge_hash)
         }
-        ExecuteMsg::GetJackpotGems { request_get_jackpot_hash } => {
-            execute_get_jackpot_gems(deps, env, info, request_get_jackpot_hash)
+        ExecuteMsg::SelectJackpotGems { campaign_id } => {
+            execute_select_jackpot_gems(deps, env, info, campaign_id)
         }
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
@@ -131,11 +131,11 @@ pub fn execute_forge_gem(
         .add_attribute("drand_round", drand_round.to_string()))
 }
 
-pub fn execute_get_jackpot_gems(
+pub fn execute_select_jackpot_gems(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    request_get_jackpot_hash: String,
+    campaign_id: String,
 ) -> Result<Response, ContractError> {
     // Load the config
     let config = CONFIG.load(deps.storage)?;
@@ -152,29 +152,17 @@ pub fn execute_get_jackpot_gems(
 
     let mut res = Response::new();
 
-    let drand_round: u64;
-
     let after = env.block.time;
 
     // Make randomness request message to NOIS proxy contract
     let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: nois_proxy.into(),
         msg: to_json_binary(&ProxyExecuteMsg::GetRandomnessAfter {
-            job_id: request_get_jackpot_hash.clone(),
+            job_id: campaign_id.clone(),
             after,
         })?,
         funds,
     });
-
-    // Losely ported from https://github.com/drand/drand/blob/eb36ba81e3f28c966f95bcd602f60e7ff8ef4c35/chain/time.go#L49-L63
-    if after < DRAND_GENESIS {
-        drand_round = 1
-    } else {
-        let from_genesis = after.nanos() - DRAND_GENESIS.nanos();
-        let periods_since_genesis = from_genesis / DRAND_ROUND_LENGTH;
-        let next_period_index = periods_since_genesis + 1;
-        drand_round = next_period_index + 1 // Convert 0-based counting to 1-based counting
-    }
 
     res = res.add_message(msg_make_randomess);
 
@@ -185,20 +173,13 @@ pub fn execute_get_jackpot_gems(
 
     RANDOM_JOBS.save(
         deps.storage,
-        request_get_jackpot_hash.clone(),
+        campaign_id.clone(),
         &random_jobs,
     )?;
 
-    DRAND_ROUND_WITH_HASH.save(
-        deps.storage,
-        request_get_jackpot_hash.clone(),
-        &drand_round.to_string(),
-    )?;
-
     Ok(res.add_attribute("action", "forge_gem")
-        .add_attribute("request_get_jackpot_hash", request_get_jackpot_hash)
-        .add_attribute("after", after.seconds().to_string())
-        .add_attribute("drand_round", drand_round.to_string()))
+        .add_attribute("request_get_jackpot_hash", campaign_id)
+        .add_attribute("after", after.seconds().to_string()))
 }
 
 pub fn nois_receive(
@@ -245,7 +226,7 @@ pub fn nois_receive(
                 action: "get_jackpot_gems".to_string(),
             };
             let jackpot_gems = select_jackpot_gems(callback.randomness)?;
-            JACKPOT_GEMS_WITH_HASH.save(deps.storage, job_id.clone(), &jackpot_gems)?;
+            JACKPOT_GEMS_WITH_CAMPAIGN_ID.save(deps.storage, job_id.clone(), &jackpot_gems)?;
             // update random job
             RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
         },
@@ -302,9 +283,10 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         QueryMsg::RandomSeed {} => to_json_binary(&query_random_seed(deps)?),
-        QueryMsg::RandomSeedFromRequestHash { request_hash } => to_json_binary(
-            &query_random_seed_from_request_hash(deps, request_hash)?,
+        QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
+            &query_random_seed_from_request_hash(deps, request_forge_hash)?,
         ),
+        QueryMsg::GetJackpotGems { campaign_id } => to_json_binary(&query_jackpot_gems(deps, campaign_id)?),
     }
 }
 
@@ -327,10 +309,14 @@ fn query_random_seed_from_request_hash(
     let random_response = RandomResponse {
         request_forge_hash,
         random_seed: random_job.randomness,
-        action: random_job.action,
         drand_round,
     };
     Ok(random_response)
+}
+
+fn query_jackpot_gems(deps: Deps, campaign_id: String) -> StdResult<String> {
+    let jackpot_gems = JACKPOT_GEMS_WITH_CAMPAIGN_ID.load(deps.storage, campaign_id.clone())?;
+    Ok(jackpot_gems)
 }
 
 /// validate string if it is valid bench32 string addresss
