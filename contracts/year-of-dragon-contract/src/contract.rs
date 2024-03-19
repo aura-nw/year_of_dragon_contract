@@ -140,11 +140,11 @@ pub fn execute_select_jackpot_gems(
     // Load the config
     let config = CONFIG.load(deps.storage)?;
     // Only contract owner can forge gem
-    ensure_eq!(
-        info.sender,
-        config.contract_owner,
-        ContractError::Unauthorized {}
-    );
+    // ensure_eq!(
+    //     info.sender,
+    //     config.contract_owner,
+    //     ContractError::Unauthorized {}
+    // );
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
 
