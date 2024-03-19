@@ -1,17 +1,16 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    ensure_eq, to_json_binary, Addr, Api, Binary, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
-    Response, StdResult, WasmMsg,
+    ensure_eq, to_json_binary, Addr, Api, Binary, CosmosMsg, Deps, DepsMut, Env, HexBinary, MessageInfo, Response, StdResult, WasmMsg
 };
 use cw2::set_contract_version;
 
-use nois::{NoisCallback, ProxyExecuteMsg};
+use nois::{select_from_weighted, sub_randomness_with_key, NoisCallback, ProxyExecuteMsg};
 
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_FORGE_HASH, RANDOM_JOBS, RANDOM_SEED},
+    state::{Config, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_HASH, RANDOM_JOBS, RANDOM_SEED},
 };
 
 // version info for migration info
@@ -106,15 +105,21 @@ pub fn execute_forge_gem(
         drand_round = next_period_index + 1 // Convert 0-based counting to 1-based counting
     }
 
+    let random_jobs = RandomJobs {
+        randomness: "waiting...".to_string(),
+        action: "forge_gem".to_string(),
+    };
+
     res = res.add_message(msg_make_randomess);
 
     RANDOM_JOBS.save(
         deps.storage,
         request_forge_hash.clone(),
-        &"waiting...".to_string(),
+        &random_jobs,
+
     )?;
 
-    DRAND_ROUND_WITH_FORGE_HASH.save(
+    DRAND_ROUND_WITH_HASH.save(
         deps.storage,
         request_forge_hash.clone(),
         &drand_round.to_string(),
@@ -173,13 +178,18 @@ pub fn execute_get_jackpot_gems(
 
     res = res.add_message(msg_make_randomess);
 
+    let random_jobs = RandomJobs {
+        randomness: "waiting...".to_string(),
+        action: "get_jackpot_gems".to_string(),
+    };
+
     RANDOM_JOBS.save(
         deps.storage,
         request_get_jackpot_hash.clone(),
-        &"waiting...".to_string(),
+        &random_jobs,
     )?;
 
-    DRAND_ROUND_WITH_FORGE_HASH.save(
+    DRAND_ROUND_WITH_HASH.save(
         deps.storage,
         request_get_jackpot_hash.clone(),
         &drand_round.to_string(),
@@ -217,12 +227,73 @@ pub fn nois_receive(
     // update random seed
     RANDOM_SEED.save(deps.storage, &randomness_string)?;
 
-    // update random job
-    RANDOM_JOBS.save(deps.storage, job_id.clone(), &randomness_string)?;
+    // get random job
+    let random_job = RANDOM_JOBS.load(deps.storage, job_id.clone())?;
+
+    match random_job.action.as_str() {
+        "forge_gem" => {
+            let random_jobs = RandomJobs {
+                randomness: randomness_string.clone(),
+                action: "forge_gem".to_string(),
+            };
+            // update random job
+            RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
+        },
+        "get_jackpot_gems" => {
+            let random_jobs = RandomJobs {
+                randomness: randomness_string.clone(),
+                action: "get_jackpot_gems".to_string(),
+            };
+            let jackpot_gems = select_jackpot_gems(callback.randomness)?;
+            JACKPOT_GEMS_WITH_HASH.save(deps.storage, job_id.clone(), &jackpot_gems)?;
+            // update random job
+            RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
+        },
+        _ => {
+            return Err(ContractError::InvalidRandomness {});
+        }
+    }
 
     Ok(res
         .add_attribute("action", "nois_receive")
         .add_attribute("job_id", job_id))
+}
+
+fn select_jackpot_gems(randomness: HexBinary) -> Result<String, ContractError> {
+    let mut randomness_arr: [u8; 32] = randomness
+        .to_array()
+        .map_err(|_| ContractError::InvalidRandomness {})?;
+    let mut jackpot_gems: String = String::new();
+    let list_color_weight: Vec<(&str, u32)> = vec![("W", 1), ("B", 1), ("G", 1), ("R", 1)];
+    let list_number_weight: Vec<(&str, u32)> = vec![
+        ("0", 1),
+        ("1", 1),
+        ("2", 1),
+        ("3", 1),
+        ("4", 1),
+        ("5", 1),
+        ("6", 1),
+        ("7", 1),
+        ("8", 1),
+        ("9", 1),
+    ];
+    for i in 0..3 {
+        // define random provider from the random_seed
+        let mut provider = sub_randomness_with_key(randomness_arr, i.to_string());
+        // random a new randomness
+        randomness_arr = provider.provide();
+        // randomly selecting an element from list_color_weight
+        let color = select_from_weighted(randomness_arr, &list_color_weight).unwrap();
+        // randomly selecting an element from list_number_weight
+        let number = select_from_weighted(randomness_arr, &list_number_weight).unwrap();
+        // append color and number to jackpot_gem for each round
+        if i == 2 {
+            jackpot_gems = jackpot_gems + &color + &number;
+        } else {
+            jackpot_gems = jackpot_gems + &color + &number + "-";
+        }
+    }
+    Ok(jackpot_gems)
 }
 
 /// Handling contract query
@@ -231,8 +302,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         QueryMsg::RandomSeed {} => to_json_binary(&query_random_seed(deps)?),
-        QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
-            &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
+        QueryMsg::RandomSeedFromRequestHash { request_hash } => to_json_binary(
+            &query_random_seed_from_request_hash(deps, request_hash)?,
         ),
     }
 }
@@ -247,15 +318,16 @@ fn query_random_seed(deps: Deps) -> StdResult<String> {
     Ok(random_seed)
 }
 
-fn query_random_seed_from_request_forge_hash(
+fn query_random_seed_from_request_hash(
     deps: Deps,
     request_forge_hash: String,
 ) -> StdResult<RandomResponse> {
     let random_job = RANDOM_JOBS.load(deps.storage, request_forge_hash.clone())?;
-    let drand_round = DRAND_ROUND_WITH_FORGE_HASH.load(deps.storage, request_forge_hash.clone())?;
+    let drand_round = DRAND_ROUND_WITH_HASH.load(deps.storage, request_forge_hash.clone())?;
     let random_response = RandomResponse {
         request_forge_hash,
-        random_seed: random_job,
+        random_seed: random_job.randomness,
+        action: random_job.action,
         drand_round,
     };
     Ok(random_response)
@@ -278,7 +350,7 @@ mod test_nois_receive {
     };
     use nois::NoisCallback;
 
-    use crate::state::{Config, CONFIG};
+    use crate::state::{Config, CONFIG, RANDOM_JOBS};
 
     #[test]
     fn test_nois_receive() {
@@ -297,8 +369,16 @@ mod test_nois_receive {
             }
         };
         CONFIG.save(&mut deps.storage, &config).unwrap();
-
         let job_id = "job_id".to_string();
+        RANDOM_JOBS.save(
+            &mut deps.storage,
+            job_id.clone(),
+            &super::RandomJobs {
+                randomness: "waiting...".to_string(),
+                action: "forge_gem".to_string(),
+            },
+        ).unwrap();
+
         let randomness =
             "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();
         let callback = NoisCallback {
@@ -310,5 +390,14 @@ mod test_nois_receive {
         let res = super::nois_receive(deps.as_mut(), env, info, callback).unwrap();
 
         assert_eq!(res.attributes.len(), 2);
+    }
+
+    #[test]
+    fn test_select_jackpot_gems() {
+        let randomness =
+            "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();
+        let randomness = HexBinary::from_hex(&randomness).unwrap();
+        let jackpot_gems = super::select_jackpot_gems(randomness).unwrap();
+        assert_eq!(jackpot_gems, "R4-B3-G6");
     }
 }

@@ -31,7 +31,7 @@ pub enum QueryMsg {
     // Random seed
     #[returns(String)]
     RandomSeed {},
-    // Query Random seed from request forge hash
+    // Query Random seed from request hash
     #[returns(RandomResponse)]
-    RandomSeedFromRequestForgeHash { request_forge_hash: String },
+    RandomSeedFromRequestHash { request_hash: String },
 }

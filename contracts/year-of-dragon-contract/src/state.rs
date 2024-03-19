@@ -17,7 +17,14 @@ pub struct RandomJob {
 pub struct RandomResponse {
     pub request_forge_hash: String,
     pub random_seed: String,
+    pub action: String,
     pub drand_round: String,
+}
+
+#[cw_serde]
+pub struct RandomJobs {
+    pub randomness: String,
+    pub action: String,
 }
 
 pub const CONFIG: Item<Config> = Item::new("config");
@@ -28,6 +35,8 @@ pub const DRAND_ROUND_LENGTH: u64 = 3_000_000_000; // in nanoseconds
 
 pub const RANDOM_SEED: Item<String> = Item::new("random seed");
 
-pub const RANDOM_JOBS: Map<String, String> = Map::new("random jobs");
+pub const RANDOM_JOBS: Map<String, RandomJobs> = Map::new("random jobs");
 
-pub const DRAND_ROUND_WITH_FORGE_HASH: Map<String, String> = Map::new("drand round with forge hash");
+pub const DRAND_ROUND_WITH_HASH: Map<String, String> = Map::new("drand round with hash");
+
+pub const JACKPOT_GEMS_WITH_HASH: Map<String, String> = Map::new("jackpot gems with hash");
