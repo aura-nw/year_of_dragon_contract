@@ -11,7 +11,7 @@ use nois::{NoisCallback, ProxyExecuteMsg};
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, CONFIG, RANDOM_JOBS, RANDOM_SEED},
+    state::{Config, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_FORGE_HASH, RANDOM_JOBS, RANDOM_SEED},
 };
 
 // version info for migration info
@@ -81,7 +81,9 @@ pub fn execute_forge_gem(
 
     let mut res = Response::new();
 
-    let after = env.block.time.plus_seconds(1);
+    let drand_round: u64;
+
+    let after = env.block.time;
 
     // Make randomness request message to NOIS proxy contract
     let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
@@ -93,6 +95,16 @@ pub fn execute_forge_gem(
         funds,
     });
 
+    // Losely ported from https://github.com/drand/drand/blob/eb36ba81e3f28c966f95bcd602f60e7ff8ef4c35/chain/time.go#L49-L63
+    if after < DRAND_GENESIS {
+        drand_round = 1
+    } else {
+        let from_genesis = after.nanos() - DRAND_GENESIS.nanos();
+        let periods_since_genesis = from_genesis / DRAND_ROUND_LENGTH;
+        let next_period_index = periods_since_genesis + 1;
+        drand_round = next_period_index + 1 // Convert 0-based counting to 1-based counting
+    }
+
     res = res.add_message(msg_make_randomess);
 
     RANDOM_JOBS.save(
@@ -100,9 +112,17 @@ pub fn execute_forge_gem(
         request_forge_hash.clone(),
         &"waiting...".to_string(),
     )?;
+
+    DRAND_ROUND_WITH_FORGE_HASH.save(
+        deps.storage,
+        request_forge_hash.clone(),
+        &drand_round.to_string(),
+    )?;
+
     Ok(res.add_attribute("action", "forge_gem")
         .add_attribute("request_forge_hash", request_forge_hash)
-        .add_attribute("after", after.to_string()))
+        .add_attribute("after", after.seconds().to_string())
+        .add_attribute("drand_round", drand_round.to_string()))
 }
 
 pub fn nois_receive(
@@ -148,6 +168,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
             &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
         ),
+        QueryMsg::DrandRoundWithForgeHash { request_forge_hash } => to_json_binary(
+            &query_drand_round_with_forge_hash(deps, request_forge_hash)?,
+        ),
     }
 }
 
@@ -167,6 +190,14 @@ fn query_random_seed_from_request_forge_hash(
 ) -> StdResult<String> {
     let random_job = RANDOM_JOBS.load(deps.storage, request_forge_hash)?;
     Ok(random_job)
+}
+
+fn query_drand_round_with_forge_hash(
+    deps: Deps,
+    request_forge_hash: String,
+) -> StdResult<String> {
+    let drand_round = DRAND_ROUND_WITH_FORGE_HASH.load(deps.storage, request_forge_hash)?;
+    Ok(drand_round)
 }
 
 /// validate string if it is valid bench32 string addresss

@@ -32,4 +32,7 @@ pub enum QueryMsg {
     // Query Random seed from request forge hash
     #[returns(String)]
     RandomSeedFromRequestForgeHash { request_forge_hash: String },
+    // Query drand round with forge hash
+    #[returns(String)]
+    DrandRoundWithForgeHash { request_forge_hash: String },
 }
