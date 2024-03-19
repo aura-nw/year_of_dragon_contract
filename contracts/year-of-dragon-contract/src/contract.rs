@@ -11,7 +11,7 @@ use nois::{NoisCallback, ProxyExecuteMsg};
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_FORGE_HASH, RANDOM_JOBS, RANDOM_SEED},
+    state::{Config, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_FORGE_HASH, RANDOM_JOBS, RANDOM_SEED},
 };
 
 // version info for migration info
@@ -36,8 +36,6 @@ pub fn instantiate(
     };
 
     CONFIG.save(deps.storage, &config)?;
-
-    RANDOM_SEED.save(deps.storage, &msg.random_seed)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -168,9 +166,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
             &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
         ),
-        QueryMsg::DrandRoundWithForgeHash { request_forge_hash } => to_json_binary(
-            &query_drand_round_with_forge_hash(deps, request_forge_hash)?,
-        ),
     }
 }
 
@@ -187,17 +182,15 @@ fn query_random_seed(deps: Deps) -> StdResult<String> {
 fn query_random_seed_from_request_forge_hash(
     deps: Deps,
     request_forge_hash: String,
-) -> StdResult<String> {
-    let random_job = RANDOM_JOBS.load(deps.storage, request_forge_hash)?;
-    Ok(random_job)
-}
-
-fn query_drand_round_with_forge_hash(
-    deps: Deps,
-    request_forge_hash: String,
-) -> StdResult<String> {
-    let drand_round = DRAND_ROUND_WITH_FORGE_HASH.load(deps.storage, request_forge_hash)?;
-    Ok(drand_round)
+) -> StdResult<RandomResponse> {
+    let random_job = RANDOM_JOBS.load(deps.storage, request_forge_hash.clone())?;
+    let drand_round = DRAND_ROUND_WITH_FORGE_HASH.load(deps.storage, request_forge_hash.clone())?;
+    let random_response = RandomResponse {
+        request_forge_hash,
+        random_seed: random_job,
+        drand_round,
+    };
+    Ok(random_response)
 }
 
 /// validate string if it is valid bench32 string addresss

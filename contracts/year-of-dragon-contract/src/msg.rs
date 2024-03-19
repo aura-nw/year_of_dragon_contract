@@ -1,13 +1,11 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use nois::NoisCallback;
 
-use crate::state::Config;
+use crate::state::{Config, RandomResponse};
 
 /// Message type for `instantiate` entry_point
 #[cw_serde]
 pub struct InstantiateMsg {
-    // must be hex string and has length 64
-    pub random_seed: String,
     // bench32 string address
     pub nois_proxy: String,
 }
@@ -30,9 +28,6 @@ pub enum QueryMsg {
     #[returns(String)]
     RandomSeed {},
     // Query Random seed from request forge hash
-    #[returns(String)]
+    #[returns(RandomResponse)]
     RandomSeedFromRequestForgeHash { request_forge_hash: String },
-    // Query drand round with forge hash
-    #[returns(String)]
-    DrandRoundWithForgeHash { request_forge_hash: String },
 }

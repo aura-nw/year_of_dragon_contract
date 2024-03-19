@@ -13,6 +13,13 @@ pub struct RandomJob {
     pub request_forge_hash: String,
 }
 
+#[cw_serde]
+pub struct RandomResponse {
+    pub request_forge_hash: String,
+    pub random_seed: String,
+    pub drand_round: String,
+}
+
 pub const CONFIG: Item<Config> = Item::new("config");
 
 // https://api3.drand.sh/dbd506d6ef76e5f386f41c651dcb808c5bcbd75471cc4eafa3f4df7ad4e4c493/info
