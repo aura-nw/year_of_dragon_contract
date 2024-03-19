@@ -8,6 +8,8 @@ use crate::state::{Config, RandomResponse};
 pub struct InstantiateMsg {
     // bench32 string address
     pub nois_proxy: String,
+    // operator address
+    pub operator: String,
 }
 
 /// Message type for `execute` entry_point
@@ -15,6 +17,8 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     // Forging gem
     ForgeGem { request_forge_hash: String },
+    // Get Jackpot Gems
+    GetJackpotGems { request_get_jackpot_hash: String },
     // Nois callback
     NoisReceive { callback: NoisCallback },
 }

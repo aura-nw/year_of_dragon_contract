@@ -32,7 +32,7 @@ pub fn instantiate(
 
     let config = Config {
         nois_proxy,
-        contract_owner: info.sender.clone(),
+        contract_owner: Addr::unchecked(msg.operator),
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -52,6 +52,9 @@ pub fn execute(
     match msg {
         ExecuteMsg::ForgeGem { request_forge_hash } => {
             execute_forge_gem(deps, env, info, request_forge_hash)
+        }
+        ExecuteMsg::GetJackpotGems { request_get_jackpot_hash } => {
+            execute_get_jackpot_gems(deps, env, info, request_get_jackpot_hash)
         }
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
@@ -119,6 +122,71 @@ pub fn execute_forge_gem(
 
     Ok(res.add_attribute("action", "forge_gem")
         .add_attribute("request_forge_hash", request_forge_hash)
+        .add_attribute("after", after.seconds().to_string())
+        .add_attribute("drand_round", drand_round.to_string()))
+}
+
+pub fn execute_get_jackpot_gems(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    request_get_jackpot_hash: String,
+) -> Result<Response, ContractError> {
+    // Load the config
+    let config = CONFIG.load(deps.storage)?;
+    // Only contract owner can forge gem
+    ensure_eq!(
+        info.sender,
+        config.contract_owner,
+        ContractError::Unauthorized {}
+    );
+    // Load the nois_proxy
+    let nois_proxy = config.nois_proxy;
+
+    let funds = info.funds;
+
+    let mut res = Response::new();
+
+    let drand_round: u64;
+
+    let after = env.block.time;
+
+    // Make randomness request message to NOIS proxy contract
+    let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
+        contract_addr: nois_proxy.into(),
+        msg: to_json_binary(&ProxyExecuteMsg::GetRandomnessAfter {
+            job_id: request_get_jackpot_hash.clone(),
+            after,
+        })?,
+        funds,
+    });
+
+    // Losely ported from https://github.com/drand/drand/blob/eb36ba81e3f28c966f95bcd602f60e7ff8ef4c35/chain/time.go#L49-L63
+    if after < DRAND_GENESIS {
+        drand_round = 1
+    } else {
+        let from_genesis = after.nanos() - DRAND_GENESIS.nanos();
+        let periods_since_genesis = from_genesis / DRAND_ROUND_LENGTH;
+        let next_period_index = periods_since_genesis + 1;
+        drand_round = next_period_index + 1 // Convert 0-based counting to 1-based counting
+    }
+
+    res = res.add_message(msg_make_randomess);
+
+    RANDOM_JOBS.save(
+        deps.storage,
+        request_get_jackpot_hash.clone(),
+        &"waiting...".to_string(),
+    )?;
+
+    DRAND_ROUND_WITH_FORGE_HASH.save(
+        deps.storage,
+        request_get_jackpot_hash.clone(),
+        &drand_round.to_string(),
+    )?;
+
+    Ok(res.add_attribute("action", "forge_gem")
+        .add_attribute("request_get_jackpot_hash", request_get_jackpot_hash)
         .add_attribute("after", after.seconds().to_string())
         .add_attribute("drand_round", drand_round.to_string()))
 }
