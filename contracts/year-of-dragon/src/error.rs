@@ -14,6 +14,12 @@ pub enum ContractError {
 
     #[error("Invalid randomness")]
     InvalidRandomness {},
+
+    #[error("Invalid campaign id")]
+    InvalidCampaignId {},
+
+    #[error("Invalid forge hash")]
+    InvalidForgeHash {},
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
 }

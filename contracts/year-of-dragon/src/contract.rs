@@ -81,6 +81,10 @@ pub fn execute_forge_gem(
         config.contract_operator,
         ContractError::Unauthorized {}
     );
+    // if request_forge_hash already exists in RANDOM_JOBS then return error
+    if RANDOM_JOBS.may_load(deps.storage, request_forge_hash.clone())?.is_some() {
+        return Err(ContractError::InvalidForgeHash {});
+    }
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
 
@@ -148,6 +152,11 @@ pub fn execute_select_jackpot_gems(
     //     config.contract_operator,
     //     ContractError::Unauthorized {}
     // );
+    // if campaign_id already exists in RANDOM_JOBS then return error
+    if RANDOM_JOBS.may_load(deps.storage, campaign_id.clone())?.is_some() {
+        return Err(ContractError::InvalidCampaignId {});
+    }
+
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
 
@@ -274,7 +283,6 @@ fn select_jackpot_gems(randomness: HexBinary) -> Result<String, ContractError> {
     let mut jackpot_gems: String = String::new();
     let list_color_weight: Vec<(&str, u32)> = vec![("W", 1), ("B", 1), ("G", 1), ("R", 1)];
     let list_number_weight: Vec<(&str, u32)> = vec![
-        ("0", 1),
         ("1", 1),
         ("2", 1),
         ("3", 1),
@@ -282,8 +290,6 @@ fn select_jackpot_gems(randomness: HexBinary) -> Result<String, ContractError> {
         ("5", 1),
         ("6", 1),
         ("7", 1),
-        ("8", 1),
-        ("9", 1),
     ];
     for i in 0..3 {
         // define random provider from the random_seed
@@ -311,7 +317,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
         QueryMsg::RandomSeed {} => to_json_binary(&query_random_seed(deps)?),
         QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
-            &query_random_seed_from_request_hash(deps, request_forge_hash)?,
+            &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
         ),
         QueryMsg::GetJackpotGems { campaign_id } => {
             to_json_binary(&query_jackpot_gems(deps, campaign_id)?)
@@ -329,7 +335,7 @@ fn query_random_seed(deps: Deps) -> StdResult<String> {
     Ok(random_seed)
 }
 
-fn query_random_seed_from_request_hash(
+fn query_random_seed_from_request_forge_hash(
     deps: Deps,
     request_forge_hash: String,
 ) -> StdResult<RandomResponse> {
@@ -344,7 +350,7 @@ fn query_random_seed_from_request_hash(
 }
 
 fn query_jackpot_gems(deps: Deps, campaign_id: String) -> StdResult<String> {
-    let jackpot_gems = JACKPOT_GEMS_WITH_CAMPAIGN_ID.load(deps.storage, campaign_id.clone())?;
+    let jackpot_gems = JACKPOT_GEMS_WITH_CAMPAIGN_ID.load(deps.storage, campaign_id)?;
     Ok(jackpot_gems)
 }
 
