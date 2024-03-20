@@ -1,7 +1,8 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    ensure_eq, to_json_binary, Addr, Api, Binary, CosmosMsg, Deps, DepsMut, Env, HexBinary, MessageInfo, Response, StdResult, WasmMsg
+    ensure_eq, to_json_binary, Addr, Api, Binary, CosmosMsg, Deps, DepsMut, Env, HexBinary,
+    MessageInfo, Response, StdResult, WasmMsg,
 };
 use cw2::set_contract_version;
 
@@ -10,11 +11,13 @@ use nois::{select_from_weighted, sub_randomness_with_key, NoisCallback, ProxyExe
 use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{Config, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED},
+    state::{
+        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED
+    },
 };
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:wheel-of-fortune";
+const CONTRACT_NAME: &str = "crates.io:year-of-dragon";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Handling contract instantiation
@@ -31,7 +34,7 @@ pub fn instantiate(
 
     let config = Config {
         nois_proxy,
-        contract_owner: Addr::unchecked(msg.operator),
+        contract_operator: Addr::unchecked(msg.operator),
     };
 
     CONFIG.save(deps.storage, &config)?;
@@ -55,6 +58,10 @@ pub fn execute(
         ExecuteMsg::SelectJackpotGems { campaign_id } => {
             execute_select_jackpot_gems(deps, env, info, campaign_id)
         }
+        ExecuteMsg::UpdateConfig {
+            nois_proxy,
+            operator,
+        } => execute_update_config(deps, info, nois_proxy, operator),
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
     }
@@ -71,7 +78,7 @@ pub fn execute_forge_gem(
     // Only contract owner can forge gem
     ensure_eq!(
         info.sender,
-        config.contract_owner,
+        config.contract_operator,
         ContractError::Unauthorized {}
     );
     // Load the nois_proxy
@@ -112,12 +119,7 @@ pub fn execute_forge_gem(
 
     res = res.add_message(msg_make_randomess);
 
-    RANDOM_JOBS.save(
-        deps.storage,
-        request_forge_hash.clone(),
-        &random_jobs,
-
-    )?;
+    RANDOM_JOBS.save(deps.storage, request_forge_hash.clone(), &random_jobs)?;
 
     DRAND_ROUND_WITH_HASH.save(
         deps.storage,
@@ -125,7 +127,8 @@ pub fn execute_forge_gem(
         &drand_round.to_string(),
     )?;
 
-    Ok(res.add_attribute("action", "forge_gem")
+    Ok(res
+        .add_attribute("action", "forge_gem")
         .add_attribute("request_forge_hash", request_forge_hash)
         .add_attribute("after", after.seconds().to_string())
         .add_attribute("drand_round", drand_round.to_string()))
@@ -142,7 +145,7 @@ pub fn execute_select_jackpot_gems(
     // Only contract owner can forge gem
     // ensure_eq!(
     //     info.sender,
-    //     config.contract_owner,
+    //     config.contract_operator,
     //     ContractError::Unauthorized {}
     // );
     // Load the nois_proxy
@@ -171,15 +174,43 @@ pub fn execute_select_jackpot_gems(
         action: "get_jackpot_gems".to_string(),
     };
 
-    RANDOM_JOBS.save(
-        deps.storage,
-        campaign_id.clone(),
-        &random_jobs,
-    )?;
+    RANDOM_JOBS.save(deps.storage, campaign_id.clone(), &random_jobs)?;
 
-    Ok(res.add_attribute("action", "forge_gem")
+    Ok(res
+        .add_attribute("action", "forge_gem")
         .add_attribute("request_get_jackpot_hash", campaign_id)
         .add_attribute("after", after.seconds().to_string()))
+}
+
+pub fn execute_update_config(
+    deps: DepsMut,
+    info: MessageInfo,
+    nois_proxy: Option<String>,
+    operator: Option<String>,
+) -> Result<Response, ContractError> {
+    let mut config: Config = CONFIG.load(deps.storage)?;
+
+    ensure_eq!(
+        info.sender,
+        config.contract_operator,
+        ContractError::Unauthorized {}
+    );
+
+    if let Some(nois_proxy) = nois_proxy {
+        let nois_proxy = addr_validate(deps.api, &nois_proxy)?;
+        config.nois_proxy = nois_proxy;
+    }
+
+    if let Some(operator) = operator {
+        config.contract_operator = Addr::unchecked(operator);
+    }
+
+    CONFIG.save(deps.storage, &config)?;
+
+    Ok(Response::new()
+        .add_attribute("action", "update_config")
+        .add_attribute("nois_proxy", config.nois_proxy.to_string())
+        .add_attribute("contract_operator", config.contract_operator.to_string()))
 }
 
 pub fn nois_receive(
@@ -197,10 +228,6 @@ pub fn nois_receive(
     );
     let res = Response::new();
     let job_id = callback.job_id;
-    // let randomness: [u8; 32] = callback
-    //     .randomness
-    //     .to_array()
-    //     .map_err(|_| ContractError::InvalidRandomness {})?;
 
     // Convert the random seed to string
     let randomness_string: String = callback.randomness.to_hex();
@@ -219,7 +246,7 @@ pub fn nois_receive(
             };
             // update random job
             RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
-        },
+        }
         "get_jackpot_gems" => {
             let random_jobs = RandomJobs {
                 randomness: randomness_string.clone(),
@@ -229,7 +256,7 @@ pub fn nois_receive(
             JACKPOT_GEMS_WITH_CAMPAIGN_ID.save(deps.storage, job_id.clone(), &jackpot_gems)?;
             // update random job
             RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
-        },
+        }
         _ => {
             return Err(ContractError::InvalidRandomness {});
         }
@@ -286,7 +313,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
             &query_random_seed_from_request_hash(deps, request_forge_hash)?,
         ),
-        QueryMsg::GetJackpotGems { campaign_id } => to_json_binary(&query_jackpot_gems(deps, campaign_id)?),
+        QueryMsg::GetJackpotGems { campaign_id } => {
+            to_json_binary(&query_jackpot_gems(deps, campaign_id)?)
+        }
     }
 }
 
@@ -327,6 +356,12 @@ fn addr_validate(api: &dyn Api, addr: &str) -> Result<Addr, ContractError> {
     Ok(addr)
 }
 
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::default())
+}
+
 // Unit test for select_gem_rewards
 #[cfg(test)]
 mod test_nois_receive {
@@ -337,6 +372,24 @@ mod test_nois_receive {
     use nois::NoisCallback;
 
     use crate::state::{Config, CONFIG, RANDOM_JOBS};
+
+    #[test]
+    fn test_update_config() {
+        let mut deps = mock_dependencies();
+
+        let env = mock_env();
+        let sender = "contract_operator".to_string();
+        let funds = vec![];
+
+        let info = mock_info(&sender, &funds);
+        let nois_proxy = "nois_proxy".to_string();
+        let operator = "contract_operator".to_string();
+        let res = super::execute_update_config(deps.as_mut(), info, Some(nois_proxy), Some(operator))
+            .unwrap();
+
+        // assert operator and nois_proxy
+        // assert_eq!(res.attributes.)
+    }
 
     #[test]
     fn test_nois_receive() {
@@ -351,19 +404,21 @@ mod test_nois_receive {
         let config = {
             Config {
                 nois_proxy: Addr::unchecked("nois_proxy"),
-                contract_owner: Addr::unchecked("contract_owner"),
+                contract_operator: Addr::unchecked("contract_operator"),
             }
         };
         CONFIG.save(&mut deps.storage, &config).unwrap();
         let job_id = "job_id".to_string();
-        RANDOM_JOBS.save(
-            &mut deps.storage,
-            job_id.clone(),
-            &super::RandomJobs {
-                randomness: "waiting...".to_string(),
-                action: "forge_gem".to_string(),
-            },
-        ).unwrap();
+        RANDOM_JOBS
+            .save(
+                &mut deps.storage,
+                job_id.clone(),
+                &super::RandomJobs {
+                    randomness: "waiting...".to_string(),
+                    action: "forge_gem".to_string(),
+                },
+            )
+            .unwrap();
 
         let randomness =
             "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();

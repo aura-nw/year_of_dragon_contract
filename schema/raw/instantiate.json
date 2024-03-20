@@ -5,13 +5,13 @@
   "type": "object",
   "required": [
     "nois_proxy",
-    "random_seed"
+    "operator"
   ],
   "properties": {
     "nois_proxy": {
       "type": "string"
     },
-    "random_seed": {
+    "operator": {
       "type": "string"
     }
   },

@@ -1,5 +1,5 @@
 [package]
-name = "year-of-dragon-contract"
+name = "year-of-dragon"
 version = "0.1.0"
 authors = ["haitranwang <haitranwang@gmail.com>"]
 edition = "2021"

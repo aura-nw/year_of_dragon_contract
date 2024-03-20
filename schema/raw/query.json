@@ -48,6 +48,27 @@
         }
       },
       "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "get_jackpot_gems"
+      ],
+      "properties": {
+        "get_jackpot_gems": {
+          "type": "object",
+          "required": [
+            "campaign_id"
+          ],
+          "properties": {
+            "campaign_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   ]
 }

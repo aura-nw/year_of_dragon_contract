@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
 
-use year_of_dragon_contract::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use year_of_dragon::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 
 fn main() {
     write_api! {

@@ -27,6 +27,54 @@
     {
       "type": "object",
       "required": [
+        "select_jackpot_gems"
+      ],
+      "properties": {
+        "select_jackpot_gems": {
+          "type": "object",
+          "required": [
+            "campaign_id"
+          ],
+          "properties": {
+            "campaign_id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "update_config"
+      ],
+      "properties": {
+        "update_config": {
+          "type": "object",
+          "properties": {
+            "nois_proxy": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "operator": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
         "nois_receive"
       ],
       "properties": {

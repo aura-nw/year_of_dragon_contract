@@ -1,5 +1,5 @@
 {
-  "contract_name": "year-of-dragon-contract",
+  "contract_name": "year-of-dragon",
   "contract_version": "0.1.0",
   "idl_version": "1.0.0",
   "instantiate": {
@@ -9,13 +9,13 @@
     "type": "object",
     "required": [
       "nois_proxy",
-      "random_seed"
+      "operator"
     ],
     "properties": {
       "nois_proxy": {
         "type": "string"
       },
-      "random_seed": {
+      "operator": {
         "type": "string"
       }
     },
@@ -40,6 +40,54 @@
             "properties": {
               "request_forge_hash": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "select_jackpot_gems"
+        ],
+        "properties": {
+          "select_jackpot_gems": {
+            "type": "object",
+            "required": [
+              "campaign_id"
+            ],
+            "properties": {
+              "campaign_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "update_config"
+        ],
+        "properties": {
+          "update_config": {
+            "type": "object",
+            "properties": {
+              "nois_proxy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "operator": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "additionalProperties": false
@@ -170,6 +218,27 @@
           }
         },
         "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "required": [
+          "get_jackpot_gems"
+        ],
+        "properties": {
+          "get_jackpot_gems": {
+            "type": "object",
+            "required": [
+              "campaign_id"
+            ],
+            "properties": {
+              "campaign_id": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
     ]
   },
@@ -181,11 +250,11 @@
       "title": "Config",
       "type": "object",
       "required": [
-        "contract_owner",
+        "contract_operator",
         "nois_proxy"
       ],
       "properties": {
-        "contract_owner": {
+        "contract_operator": {
           "$ref": "#/definitions/Addr"
         },
         "nois_proxy": {
@@ -200,6 +269,11 @@
         }
       }
     },
+    "get_jackpot_gems": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "String",
+      "type": "string"
+    },
     "random_seed": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "String",
@@ -207,8 +281,25 @@
     },
     "random_seed_from_request_forge_hash": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "String",
-      "type": "string"
+      "title": "RandomResponse",
+      "type": "object",
+      "required": [
+        "drand_round",
+        "random_seed",
+        "request_forge_hash"
+      ],
+      "properties": {
+        "drand_round": {
+          "type": "string"
+        },
+        "random_seed": {
+          "type": "string"
+        },
+        "request_forge_hash": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
