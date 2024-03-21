@@ -38,6 +38,6 @@ pub const DRAND_ROUND_LENGTH: u64 = 3_000_000_000; // in nanoseconds
 pub const RANDOM_SEED: Item<String> = Item::new("random seed");
 pub const RANDOM_JOBS: Map<String, RandomJobs> = Map::new("random jobs");
 pub const DRAND_ROUND_WITH_HASH: Map<String, String> = Map::new("drand round with hash");
-pub const MAX_STAR_WITH_CAMPAIGN_ID: Map<String, String> = Map::new("max star with campaign id");
+pub const MAX_STAR_WITH_CAMPAIGN_ID: Map<String, u32> = Map::new("max star with campaign id");
 pub const JACKPOT_GEMS_WITH_CAMPAIGN_ID: Map<String, String> =
     Map::new("jackpot gems with campaign id");

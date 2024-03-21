@@ -152,6 +152,13 @@ pub fn execute_select_jackpot_gems(
     //     config.contract_operator,
     //     ContractError::Unauthorized {}
     // );
+
+    // max_star should be a number and in range 1-7
+    let max_star: u32 = max_star.parse().map_err(|_| ContractError::InvalidMaxStar {})?;
+    if max_star < 1 || max_star > 7 {
+        return Err(ContractError::InvalidMaxStar {});
+    }
+
     // if campaign_id already exists in RANDOM_JOBS then return error
     if RANDOM_JOBS
         .may_load(deps.storage, campaign_id.clone())?
@@ -241,7 +248,7 @@ pub fn nois_receive(
             // convert max_star to list_number_weight with the length of max_star
             let mut list_number_weight: Vec<(String, u32)> = Vec::new();
 
-            for i in 1..=max_star.parse::<u32>().unwrap() {
+            for i in 1..=max_star {
                 // create list_number_weight with max_star
                 list_number_weight.push((i.to_string(), 1));
             }
