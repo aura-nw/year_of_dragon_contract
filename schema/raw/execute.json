@@ -34,27 +34,14 @@
           "type": "object",
           "required": [
             "campaign_id",
-            "list_number_weight"
+            "max_star"
           ],
           "properties": {
             "campaign_id": {
               "type": "string"
             },
-            "list_number_weight": {
-              "type": "array",
-              "items": {
-                "type": "array",
-                "items": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ],
-                "maxItems": 2,
-                "minItems": 2
-              }
+            "max_star": {
+              "type": "string"
             }
           },
           "additionalProperties": false

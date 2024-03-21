@@ -305,7 +305,6 @@ fn select_jackpot_gems(randomness: HexBinary, list_number_weight: Vec<(&str, u32
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Config {} => to_json_binary(&query_config(deps)?),
-        QueryMsg::RandomSeed {} => to_json_binary(&query_random_seed(deps)?),
         QueryMsg::RandomSeedFromRequestForgeHash { request_forge_hash } => to_json_binary(
             &query_random_seed_from_request_forge_hash(deps, request_forge_hash)?,
         ),
@@ -317,12 +316,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 fn query_config(deps: Deps) -> StdResult<Config> {
     CONFIG.load(deps.storage)
-}
-
-fn query_random_seed(deps: Deps) -> StdResult<String> {
-    let random_seed = RANDOM_SEED.load(deps.storage)?;
-    // Convert the random seed to string
-    Ok(random_seed)
 }
 
 fn query_random_seed_from_request_forge_hash(

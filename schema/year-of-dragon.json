@@ -57,27 +57,14 @@
             "type": "object",
             "required": [
               "campaign_id",
-              "list_number_weight"
+              "max_star"
             ],
             "properties": {
               "campaign_id": {
                 "type": "string"
               },
-              "list_number_weight": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ],
-                  "maxItems": 2,
-                  "minItems": 2
-                }
+              "max_star": {
+                "type": "string"
               }
             },
             "additionalProperties": false
@@ -178,19 +165,6 @@
       {
         "type": "object",
         "required": [
-          "random_seed"
-        ],
-        "properties": {
-          "random_seed": {
-            "type": "object",
-            "additionalProperties": false
-          }
-        },
-        "additionalProperties": false
-      },
-      {
-        "type": "object",
-        "required": [
           "random_seed_from_request_forge_hash"
         ],
         "properties": {
@@ -260,11 +234,6 @@
       }
     },
     "get_jackpot_gems": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "String",
-      "type": "string"
-    },
-    "random_seed": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "String",
       "type": "string"

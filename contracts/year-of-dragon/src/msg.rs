@@ -28,9 +28,6 @@ pub enum ExecuteMsg {
 pub enum QueryMsg {
     #[returns(Config)]
     Config {},
-    // Random seed
-    #[returns(String)]
-    RandomSeed {},
     // Query Random seed from request forge hash
     #[returns(RandomResponse)]
     RandomSeedFromRequestForgeHash { request_forge_hash: String },

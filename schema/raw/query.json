@@ -18,19 +18,6 @@
     {
       "type": "object",
       "required": [
-        "random_seed"
-      ],
-      "properties": {
-        "random_seed": {
-          "type": "object",
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
         "random_seed_from_request_forge_hash"
       ],
       "properties": {
