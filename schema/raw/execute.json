@@ -33,38 +33,28 @@
         "select_jackpot_gems": {
           "type": "object",
           "required": [
-            "campaign_id"
+            "campaign_id",
+            "list_number_weight"
           ],
           "properties": {
             "campaign_id": {
               "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "update_config"
-      ],
-      "properties": {
-        "update_config": {
-          "type": "object",
-          "properties": {
-            "nois_proxy": {
-              "type": [
-                "string",
-                "null"
-              ]
             },
-            "operator": {
-              "type": [
-                "string",
-                "null"
-              ]
+            "list_number_weight": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "maxItems": 2,
+                "minItems": 2
+              }
             }
           },
           "additionalProperties": false

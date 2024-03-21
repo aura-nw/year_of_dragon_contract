@@ -18,7 +18,7 @@ pub enum ExecuteMsg {
     // Forging gem
     ForgeGem { request_forge_hash: String },
     // Select Jackpot Gems
-    SelectJackpotGems { campaign_id: String },
+    SelectJackpotGems { campaign_id: String, max_star: String },
     // Nois callback
     NoisReceive { callback: NoisCallback },
 }

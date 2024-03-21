@@ -12,8 +12,7 @@ use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
     state::{
-        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH,
-        DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED,
+        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, MAX_STAR_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED
     },
 };
 
@@ -56,8 +55,8 @@ pub fn execute(
         ExecuteMsg::ForgeGem { request_forge_hash } => {
             execute_forge_gem(deps, env, info, request_forge_hash)
         }
-        ExecuteMsg::SelectJackpotGems { campaign_id } => {
-            execute_select_jackpot_gems(deps, env, info, campaign_id)
+        ExecuteMsg::SelectJackpotGems { campaign_id, max_star } => {
+            execute_select_jackpot_gems(deps, env, info, campaign_id, max_star)
         }
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
@@ -143,6 +142,7 @@ pub fn execute_select_jackpot_gems(
     env: Env,
     info: MessageInfo,
     campaign_id: String,
+    max_star: String,
 ) -> Result<Response, ContractError> {
     // Load the config
     let config = CONFIG.load(deps.storage)?;
@@ -159,6 +159,9 @@ pub fn execute_select_jackpot_gems(
     {
         return Err(ContractError::InvalidCampaignId {});
     }
+
+    // Save list_number_weight with campaign_id
+    MAX_STAR_WITH_CAMPAIGN_ID.save(deps.storage, campaign_id.clone(), &max_star)?;
 
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
@@ -233,7 +236,23 @@ pub fn nois_receive(
                 randomness: randomness_string.clone(),
                 action: "get_jackpot_gems".to_string(),
             };
-            let jackpot_gems = select_jackpot_gems(callback.randomness)?;
+            // get max_star with campaign_id
+            let max_star = MAX_STAR_WITH_CAMPAIGN_ID.load(deps.storage, job_id.clone())?;
+            // convert max_star to list_number_weight with the length of max_star
+            let mut list_number_weight: Vec<(String, u32)> = Vec::new();
+
+            for i in 1..=max_star.parse::<u32>().unwrap() {
+                // create list_number_weight with max_star
+                list_number_weight.push((i.to_string(), 1));
+            }
+
+            // convert list_number_weight to list_number_weight with reference
+            let list_number_weight_ref: Vec<(&str, u32)> = list_number_weight
+                .iter()
+                .map(|(number, weight)| (number.as_str(), *weight))
+                .collect();
+
+            let jackpot_gems = select_jackpot_gems(callback.randomness, list_number_weight_ref)?;
             JACKPOT_GEMS_WITH_CAMPAIGN_ID.save(deps.storage, job_id.clone(), &jackpot_gems)?;
             // update random job
             RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
@@ -248,21 +267,13 @@ pub fn nois_receive(
         .add_attribute("job_id", job_id))
 }
 
-fn select_jackpot_gems(randomness: HexBinary) -> Result<String, ContractError> {
+fn select_jackpot_gems(randomness: HexBinary, list_number_weight: Vec<(&str, u32)>) -> Result<String, ContractError> {
     let mut randomness_arr: [u8; 32] = randomness
         .to_array()
         .map_err(|_| ContractError::InvalidRandomness {})?;
     let mut jackpot_gems: String = String::new();
     let list_color_weight: Vec<(&str, u32)> = vec![("W", 1), ("B", 1), ("G", 1), ("R", 1)];
-    let list_number_weight: Vec<(&str, u32)> = vec![
-        ("1", 1),
-        ("2", 1),
-        ("3", 1),
-        ("4", 1),
-        ("5", 1),
-        ("6", 1),
-        ("7", 1),
-    ];
+
     for i in 0..3 {
         // define random provider from the random_seed
         let mut provider = sub_randomness_with_key(randomness_arr, i.to_string());
@@ -398,7 +409,8 @@ mod test_nois_receive {
         let randomness =
             "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();
         let randomness = HexBinary::from_hex(&randomness).unwrap();
-        let jackpot_gems = super::select_jackpot_gems(randomness).unwrap();
-        assert_eq!(jackpot_gems, "R4-B3-G6");
+        let list_number_weight = vec![("1", 1), ("2", 1)];
+        let jackpot_gems = super::select_jackpot_gems(randomness, list_number_weight).unwrap();
+        assert_eq!(jackpot_gems, "R2-B2-G2");
     }
 }
