@@ -16,22 +16,11 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     // Forging gem
-    ForgeGem {
-        request_forge_hash: String,
-    },
+    ForgeGem { request_forge_hash: String },
     // Select Jackpot Gems
-    SelectJackpotGems {
-        campaign_id: String,
-    },
-    // Update config
-    UpdateConfig {
-        nois_proxy: Option<String>,
-        operator: Option<String>,
-    },
+    SelectJackpotGems { campaign_id: String },
     // Nois callback
-    NoisReceive {
-        callback: NoisCallback,
-    },
+    NoisReceive { callback: NoisCallback },
 }
 
 #[cw_serde]

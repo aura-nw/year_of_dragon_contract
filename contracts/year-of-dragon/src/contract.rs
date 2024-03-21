@@ -12,7 +12,8 @@ use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
     state::{
-        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED
+        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH,
+        DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED,
     },
 };
 
@@ -58,10 +59,6 @@ pub fn execute(
         ExecuteMsg::SelectJackpotGems { campaign_id } => {
             execute_select_jackpot_gems(deps, env, info, campaign_id)
         }
-        ExecuteMsg::UpdateConfig {
-            nois_proxy,
-            operator,
-        } => execute_update_config(deps, info, nois_proxy, operator),
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
     }
@@ -82,7 +79,10 @@ pub fn execute_forge_gem(
         ContractError::Unauthorized {}
     );
     // if request_forge_hash already exists in RANDOM_JOBS then return error
-    if RANDOM_JOBS.may_load(deps.storage, request_forge_hash.clone())?.is_some() {
+    if RANDOM_JOBS
+        .may_load(deps.storage, request_forge_hash.clone())?
+        .is_some()
+    {
         return Err(ContractError::InvalidForgeHash {});
     }
     // Load the nois_proxy
@@ -97,7 +97,7 @@ pub fn execute_forge_gem(
     let after = env.block.time;
 
     // Make randomness request message to NOIS proxy contract
-    let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
+    let msg_make_randomness = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: nois_proxy.into(),
         msg: to_json_binary(&ProxyExecuteMsg::GetRandomnessAfter {
             job_id: request_forge_hash.clone(),
@@ -121,7 +121,7 @@ pub fn execute_forge_gem(
         action: "forge_gem".to_string(),
     };
 
-    res = res.add_message(msg_make_randomess);
+    res = res.add_message(msg_make_randomness);
 
     RANDOM_JOBS.save(deps.storage, request_forge_hash.clone(), &random_jobs)?;
 
@@ -153,7 +153,10 @@ pub fn execute_select_jackpot_gems(
     //     ContractError::Unauthorized {}
     // );
     // if campaign_id already exists in RANDOM_JOBS then return error
-    if RANDOM_JOBS.may_load(deps.storage, campaign_id.clone())?.is_some() {
+    if RANDOM_JOBS
+        .may_load(deps.storage, campaign_id.clone())?
+        .is_some()
+    {
         return Err(ContractError::InvalidCampaignId {});
     }
 
@@ -167,7 +170,7 @@ pub fn execute_select_jackpot_gems(
     let after = env.block.time;
 
     // Make randomness request message to NOIS proxy contract
-    let msg_make_randomess = CosmosMsg::Wasm(WasmMsg::Execute {
+    let msg_make_randomness = CosmosMsg::Wasm(WasmMsg::Execute {
         contract_addr: nois_proxy.into(),
         msg: to_json_binary(&ProxyExecuteMsg::GetRandomnessAfter {
             job_id: campaign_id.clone(),
@@ -176,7 +179,7 @@ pub fn execute_select_jackpot_gems(
         funds,
     });
 
-    res = res.add_message(msg_make_randomess);
+    res = res.add_message(msg_make_randomness);
 
     let random_jobs = RandomJobs {
         randomness: "waiting...".to_string(),
@@ -189,37 +192,6 @@ pub fn execute_select_jackpot_gems(
         .add_attribute("action", "forge_gem")
         .add_attribute("request_get_jackpot_hash", campaign_id)
         .add_attribute("after", after.seconds().to_string()))
-}
-
-pub fn execute_update_config(
-    deps: DepsMut,
-    info: MessageInfo,
-    nois_proxy: Option<String>,
-    operator: Option<String>,
-) -> Result<Response, ContractError> {
-    let mut config: Config = CONFIG.load(deps.storage)?;
-
-    ensure_eq!(
-        info.sender,
-        config.contract_operator,
-        ContractError::Unauthorized {}
-    );
-
-    if let Some(nois_proxy) = nois_proxy {
-        let nois_proxy = addr_validate(deps.api, &nois_proxy)?;
-        config.nois_proxy = nois_proxy;
-    }
-
-    if let Some(operator) = operator {
-        config.contract_operator = Addr::unchecked(operator);
-    }
-
-    CONFIG.save(deps.storage, &config)?;
-
-    Ok(Response::new()
-        .add_attribute("action", "update_config")
-        .add_attribute("nois_proxy", config.nois_proxy.to_string())
-        .add_attribute("contract_operator", config.contract_operator.to_string()))
 }
 
 pub fn nois_receive(
@@ -378,24 +350,6 @@ mod test_nois_receive {
     use nois::NoisCallback;
 
     use crate::state::{Config, CONFIG, RANDOM_JOBS};
-
-    #[test]
-    fn test_update_config() {
-        let mut deps = mock_dependencies();
-
-        let env = mock_env();
-        let sender = "contract_operator".to_string();
-        let funds = vec![];
-
-        let info = mock_info(&sender, &funds);
-        let nois_proxy = "nois_proxy".to_string();
-        let operator = "contract_operator".to_string();
-        let res = super::execute_update_config(deps.as_mut(), info, Some(nois_proxy), Some(operator))
-            .unwrap();
-
-        // assert operator and nois_proxy
-        // assert_eq!(res.attributes.)
-    }
 
     #[test]
     fn test_nois_receive() {
