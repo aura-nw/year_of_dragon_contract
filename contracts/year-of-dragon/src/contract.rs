@@ -12,7 +12,9 @@ use crate::{
     error::ContractError,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
     state::{
-        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH, DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, MAX_STAR_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED
+        Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH,
+        DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, MAX_STAR_WITH_CAMPAIGN_ID,
+        RANDOM_JOBS, RANDOM_SEED,
     },
 };
 
@@ -41,7 +43,7 @@ pub fn instantiate(
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender))
+        .add_attribute("operator", info.sender))
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -55,9 +57,10 @@ pub fn execute(
         ExecuteMsg::ForgeGem { request_forge_hash } => {
             execute_forge_gem(deps, env, info, request_forge_hash)
         }
-        ExecuteMsg::SelectJackpotGems { campaign_id, max_star } => {
-            execute_select_jackpot_gems(deps, env, info, campaign_id, max_star)
-        }
+        ExecuteMsg::SelectJackpotGems {
+            campaign_id,
+            max_star,
+        } => execute_select_jackpot_gems(deps, env, info, campaign_id, max_star),
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
     }
@@ -147,14 +150,16 @@ pub fn execute_select_jackpot_gems(
     // Load the config
     let config = CONFIG.load(deps.storage)?;
     // Only contract owner can forge gem
-    // ensure_eq!(
-    //     info.sender,
-    //     config.contract_operator,
-    //     ContractError::Unauthorized {}
-    // );
+    ensure_eq!(
+        info.sender,
+        config.contract_operator,
+        ContractError::Unauthorized {}
+    );
 
     // max_star should be a number and in range 1-7
-    let max_star: u32 = max_star.parse().map_err(|_| ContractError::InvalidMaxStar {})?;
+    let max_star: u32 = max_star
+        .parse()
+        .map_err(|_| ContractError::InvalidMaxStar {})?;
     if max_star < 1 || max_star > 7 {
         return Err(ContractError::InvalidMaxStar {});
     }
@@ -167,7 +172,7 @@ pub fn execute_select_jackpot_gems(
         return Err(ContractError::InvalidCampaignId {});
     }
 
-    // Save list_number_weight with campaign_id
+    // Save max_star with campaign_id
     MAX_STAR_WITH_CAMPAIGN_ID.save(deps.storage, campaign_id.clone(), &max_star)?;
 
     // Load the nois_proxy
@@ -274,7 +279,10 @@ pub fn nois_receive(
         .add_attribute("job_id", job_id))
 }
 
-fn select_jackpot_gems(randomness: HexBinary, list_number_weight: Vec<(&str, u32)>) -> Result<String, ContractError> {
+fn select_jackpot_gems(
+    randomness: HexBinary,
+    list_number_weight: Vec<(&str, u32)>,
+) -> Result<String, ContractError> {
     let mut randomness_arr: [u8; 32] = randomness
         .to_array()
         .map_err(|_| ContractError::InvalidRandomness {})?;

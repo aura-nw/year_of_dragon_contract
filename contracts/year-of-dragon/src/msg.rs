@@ -16,11 +16,18 @@ pub struct InstantiateMsg {
 #[cw_serde]
 pub enum ExecuteMsg {
     // Forging gem
-    ForgeGem { request_forge_hash: String },
+    ForgeGem {
+        request_forge_hash: String,
+    },
     // Select Jackpot Gems
-    SelectJackpotGems { campaign_id: String, max_star: String },
+    SelectJackpotGems {
+        campaign_id: String,
+        max_star: String,
+    },
     // Nois callback
-    NoisReceive { callback: NoisCallback },
+    NoisReceive {
+        callback: NoisCallback,
+    },
 }
 
 #[cw_serde]
