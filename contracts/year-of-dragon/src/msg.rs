@@ -23,6 +23,7 @@ pub enum ExecuteMsg {
     SelectJackpotGems {
         campaign_id: String,
         max_star: String,
+        max_number: String,
     },
     // Nois callback
     NoisReceive {

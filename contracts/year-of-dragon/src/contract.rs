@@ -13,8 +13,8 @@ use crate::{
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
     state::{
         Config, MigrateMsg, RandomJobs, RandomResponse, CONFIG, DRAND_GENESIS, DRAND_ROUND_LENGTH,
-        DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, MAX_STAR_WITH_CAMPAIGN_ID,
-        RANDOM_JOBS, RANDOM_SEED,
+        DRAND_ROUND_WITH_HASH, JACKPOT_GEMS_WITH_CAMPAIGN_ID, MAX_NUMBER_WITH_CAMPAIGN_ID,
+        MAX_STAR_WITH_CAMPAIGN_ID, RANDOM_JOBS, RANDOM_SEED,
     },
 };
 
@@ -60,7 +60,8 @@ pub fn execute(
         ExecuteMsg::SelectJackpotGems {
             campaign_id,
             max_star,
-        } => execute_select_jackpot_gems(deps, env, info, campaign_id, max_star),
+            max_number,
+        } => execute_select_jackpot_gems(deps, env, info, campaign_id, max_star, max_number),
         //nois callback
         ExecuteMsg::NoisReceive { callback } => nois_receive(deps, env, info, callback),
     }
@@ -146,6 +147,7 @@ pub fn execute_select_jackpot_gems(
     info: MessageInfo,
     campaign_id: String,
     max_star: String,
+    max_number: String,
 ) -> Result<Response, ContractError> {
     // Load the config
     let config = CONFIG.load(deps.storage)?;
@@ -163,6 +165,10 @@ pub fn execute_select_jackpot_gems(
     if max_star < 1 || max_star > 7 {
         return Err(ContractError::InvalidMaxStar {});
     }
+    // convert max_number to u32
+    let max_number: u32 = max_number
+        .parse()
+        .map_err(|_| ContractError::InvalidMaxNumber {})?;
 
     // if campaign_id already exists in RANDOM_JOBS then return error
     if RANDOM_JOBS
@@ -174,6 +180,8 @@ pub fn execute_select_jackpot_gems(
 
     // Save max_star with campaign_id
     MAX_STAR_WITH_CAMPAIGN_ID.save(deps.storage, campaign_id.clone(), &max_star)?;
+    // Save max_number with campaign_id
+    MAX_NUMBER_WITH_CAMPAIGN_ID.save(deps.storage, campaign_id.clone(), &max_number)?;
 
     // Load the nois_proxy
     let nois_proxy = config.nois_proxy;
@@ -250,6 +258,8 @@ pub fn nois_receive(
             };
             // get max_star with campaign_id
             let max_star = MAX_STAR_WITH_CAMPAIGN_ID.load(deps.storage, job_id.clone())?;
+            // get max_number with campaign_id
+            let max_number = MAX_NUMBER_WITH_CAMPAIGN_ID.load(deps.storage, job_id.clone())?;
             // convert max_star to list_number_weight with the length of max_star
             let mut list_number_weight: Vec<(String, u32)> = Vec::new();
 
@@ -264,7 +274,8 @@ pub fn nois_receive(
                 .map(|(number, weight)| (number.as_str(), *weight))
                 .collect();
 
-            let jackpot_gems = select_jackpot_gems(callback.randomness, list_number_weight_ref)?;
+            let jackpot_gems =
+                select_jackpot_gems(callback.randomness, list_number_weight_ref, max_number)?;
             JACKPOT_GEMS_WITH_CAMPAIGN_ID.save(deps.storage, job_id.clone(), &jackpot_gems)?;
             // update random job
             RANDOM_JOBS.save(deps.storage, job_id.clone(), &random_jobs)?;
@@ -282,6 +293,7 @@ pub fn nois_receive(
 fn select_jackpot_gems(
     randomness: HexBinary,
     list_number_weight: Vec<(&str, u32)>,
+    max_number: u32,
 ) -> Result<String, ContractError> {
     let mut randomness_arr: [u8; 32] = randomness
         .to_array()
@@ -289,7 +301,7 @@ fn select_jackpot_gems(
     let mut jackpot_gems: String = String::new();
     let list_color_weight: Vec<(&str, u32)> = vec![("W", 1), ("B", 1), ("G", 1), ("R", 1)];
 
-    for i in 0..3 {
+    for i in 0..max_number {
         // define random provider from the random_seed
         let mut provider = sub_randomness_with_key(randomness_arr, i.to_string());
         // random a new randomness
@@ -299,7 +311,7 @@ fn select_jackpot_gems(
         // randomly selecting an element from list_number_weight
         let number = select_from_weighted(randomness_arr, &list_number_weight).unwrap();
         // append color and number to jackpot_gem for each round
-        if i == 2 {
+        if i == max_number - 1 {
             jackpot_gems = jackpot_gems + &color + &number;
         } else {
             jackpot_gems = jackpot_gems + &color + &number + "-";
@@ -418,7 +430,7 @@ mod test_nois_receive {
             "46FAF1CD4845AB7C5A9DAA7D272259682BF84176A2658DE67CB1317A22134973".to_string();
         let randomness = HexBinary::from_hex(&randomness).unwrap();
         let list_number_weight = vec![("1", 1), ("2", 1)];
-        let jackpot_gems = super::select_jackpot_gems(randomness, list_number_weight).unwrap();
+        let jackpot_gems = super::select_jackpot_gems(randomness, list_number_weight, 3).unwrap();
         assert_eq!(jackpot_gems, "R2-B2-G2");
     }
 }
